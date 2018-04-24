@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,minimum-scale=1,maximum-scale=1,user-scalable=no"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black"/>
+  <meta name="format-detection" content="telephone=no, email=no"/>
+  <title>高德map</title>
+  <link href="../static/css/g.css" rel="stylesheet"/>
+  <script src="../static/js/g.js"></script>
+  <script src="../static/js/jquery-1.11.3.min.js"></script>
+<!--  <script type="text/javascript" src="https://webapi.amap.com/maps?v=1.3&key=53e28612ce53ad78e732b8859f51f4d2"></script>-->
+  <script type="text/javascript" src="https://webapi.amap.com/maps?v=1.3&key=8869f889deeeb4c6a587c6a3d28b09b9&plugin=AMap.Autocomplete,AMap.PlaceSearch">
+  </script>
+  <style>
+    .bgc-facd4c { background-color: #179ff4; }
+    .navigation { background: #ffd70d; height: 0.88rem; text-align: center; color: #995900; line-height: 0.88rem; }
+    /*#region 搜索*/
+    .g-search { height: .88rem; line-height: .88rem; }
+    .g-search .btn { height: .88rem; width: .88rem; }
+    .g-search .btn.goback { background: url(/App/images/icon_Getback_orange.svg) no-repeat center; }
+    .g-search .btn.dosearch { width: 1rem; }
+    .g-search input { border: solid 1px; height: .58rem; margin: .15rem 0; width: 5.62rem; box-sizing: border-box; border-radius: 4px; text-align: center; }
+    /*#endregion*/
+    .map-address { }
+    .map-address.map { height: 4.5rem; width: 7.5rem; border-bottom: solid .08rem #179ff4; }
+    .map-address .map-address-list { }
+    .map-address .map-address-list li { text-indent: .44rem; height: .64rem; margin-left: .24rem; padding: .28rem 0; border-bottom: solid 1px #f5f5f5; background: url(/App/images/icon_sign_coords.svg) no-repeat left center; }
+    .map-address .map-address-list li.cur { background-image: url(/App/images/icon_sign_coordson.svg); }
+    .map-address .map-address-list li h3 { font-weight: 500; height: .32rem; }
+    .map-address .map-address-list li p { height: .24rem; margin-top: .1rem; }
+  </style>
+</head>
+<body>
+<div class="outer">
+  <div class="g-search bgc-facd4c">
+    <a  class="btn goback fl" id="GoBack"></a>
+    <input type="text" class="fl bc-dbaa21 t-c" id="SearchKey" placeholder="搜索" />
+    <a  class="btn dosearch fr t-c ft15 c-6f4204" id="DoSearch">搜索</a>
+  </div>
+    <div class="map-address map" id="MapContent" ></div>
+    <div class="map-address content inner">
+      <div class="map-address-list">
+        <ul id="Content">
+         <!-- @*<li class="cur">
+          <h3 class="ft16 c-333333">杭州市飞云执行下</h3>
+          <p class="ft12 c-999999">浙江省杭州市美丽的西湖</p>
+        </li>*@-->
+        </ul>
+      </div>
+    </div>
+  </div>
+</body>
+<script>
+
+$(function () {
+  $.extend({
+    sortBy: function (filed, rev, primer) {
+      rev = (rev) ? -1 : 1;
+      return function (a, b) {
+        a = a[filed];
+        b = b[filed];
+        if (typeof (primer) != 'undefined') {
+          a = primer(a);
+          b = primer(b);
+        }
+        if (a < b) { return rev * -1; }
+        if (a > b) { return rev * 1; }
+        return 1;
+      }
+    }
+  });
+   var  _X=0,
+       _Y= 0,
+     _Map=null;
+  var geolocation;
+  //加载地图，调用浏览器定位服务
+  _Map = new AMap.Map('MapContent', {
+    resizeEnable: true
+  });
+  _Map.plugin('AMap.Geolocation', function () {
+    geolocation = new AMap.Geolocation({
+      enableHighAccuracy: true,//是否使用高精度定位，默认:true
+      timeout: 10000,          //超过10秒后停止定位，默认：无穷大
+      convert: true,
+      buttonOffset: new AMap.Pixel(8, 20),//定位按钮与设置的停靠位置的偏移量，默认：Pixel(10, 20)
+      zoomToAccuracy: true,      //定位成功后调整地图视野范围使定位位置及精度范围视野内可见，默认：false
+      buttonPosition: 'LB'
+    });
+    _Map.addControl(geolocation);
+    geolocation.getCurrentPosition();
+    AMap.event.addListener(geolocation, 'complete', onComplete);//返回定位信息
+    AMap.event.addListener(geolocation, 'error', onError);      //返回定位出错信息
+  });
+  _Map.on('dragend', function () {
+    var lngLat = _Map.getCenter();
+    regeocodes(lngLat);
+  });
+  var regeocodes = function (point) {
+    //localStorage.setObject('lnglat', point);
+    $.ajax({
+      nomal: true,
+      url: 'https://restapi.amap.com/v3/place/around?key=53e28612ce53ad78e732b8859f51f4d2&location=' + point.lng + ',' + point.lat + '&offset=20&page=1&extensions=all',
+      type: 'GET',
+      success: function (result) {
+        var m = [];
+        if (result.status == 1) {
+          var pois = result.pois;
+          var datas = pois.sort($.sortBy('distance', false, parseInt))
+          for (var i = 0; i < datas.length; i++) {
+            var d = datas[i];
+            var location = d.location.split(',');
+            m.push('<li class="' + (i == 0 ? 'cur' : '') + '" distance="' + d.distance + '" pname="' + d.pname + '" cityname="' + d.cityname + '" adname="' + d.adname + '" lng="' + location[0] + '" lat="' + location[1] + '" address="' + d.address + '">');
+            m.push('    <h3 class="ft16 c-333333">' + d.name + '</h3>');
+            m.push('    <p class="ft12 c-999999">' + d.address + '</p>');
+            m.push('</li>');
+          }
+        }
+        $("#Content").html(m.join(''));
+      }
+    });
+  };
+  var genDiv = function () {
+    var div = document.createElement("div");
+    // 添加文字说明
+    //div.appendChild(document.createTextNode("放大2级"));
+    // 设置样式
+    div.style.cursor = "pointer";
+    //div.style.border = "1px solid gray";
+    //div.style.backgroundColor = "red";
+    div.style.backgroundImage = "url(https://m.amap.com/picker/images/poi_icon.png)";
+    div.style.backgroundPosition = "0 0";
+    div.style.backgroundRepeat = "no-repeat";
+    div.style.width = "30px";
+    div.style.height = "44px";
+    div.style.position = "absolute";
+    div.style.top = '50%';
+    div.style.left = '50%';
+    div.style.marginLeft = '-15px';
+    div.style.marginTop = '-44px';
+    return div;
+  };
+  //解析定位结果
+  function onComplete(data) {
+    var lngLat = new AMap.LngLat(data.position.getLng(), data.position.getLat());
+    _Map.setZoom(16);
+    $(".amap-controls").append(genDiv());
+    regeocodes(lngLat);
+  }
+  //解析定位错误信息
+  function onError(data) {
+    //document.getElementById('tip').innerHTML = '定位失败';
+  }
+  //输入提示
+  var autoOptions = {
+    input: "SearchKey"
+  };
+  var auto = new AMap.Autocomplete(autoOptions);
+  var placeSearch = new AMap.PlaceSearch({
+    map: _Map
+  });  //构造地点查询类
+  AMap.event.addListener(auto, "select", select);//注册监听，当选中某条记录时会触发
+  function select(e) {
+    regeocodes({ lng: e.poi.location.lng, lat: e.poi.location.lat })
+    placeSearch.setCity(e.poi.adcode);
+    placeSearch.search(e.poi.name);  //关键字查询查询
+  }
+
+  function goBack() {
+    var lngLat = _Map.getCenter();
+    lnglatXY = [lngLat.lng, lngLat.lat]; //已知点坐标
+    function regeocoder() {  //逆地理编码
+      var geocoder = new AMap.Geocoder({
+        radius: 1000,
+        extensions: "all"
+      });
+      geocoder.getAddress(lnglatXY, function (status, result) {
+        if (status === 'complete' && result.info === 'OK') {
+          geocoder_CallBack(result);
+        }else{
+
+        }
+      });
+      //var marker = new AMap.Marker({  //加点
+      //    map: map,
+      //    position: lnglatXY
+      //});
+      //map.setFitView();
+    }
+    function geocoder_CallBack(data) {
+      var address = data.regeocode.addressComponent; //返回地址描述
+      console.log(address);
+      console.log(lngLat)
+      //$.native("GoBack", { lng: lngLat.lng, lat: lngLat.lat, address: address.province + address.city + address.district + address.township + address.street + address.streetNumber });
+    }
+    regeocoder();
+
+  }
+
+  $('#Content').on('click', 'li', function () {
+    var $this = $(this);
+    $("li.cur").removeClass("cur");
+    $this.addClass("cur");
+    var lng = $this.attr("lng");
+    var lat = $this.attr("lat");
+    var LngLat = new AMap.LngLat(lng, lat);
+    _Map.setCenter(LngLat);
+    goBack();
+  });
+});
+</script>
+
+</html>
